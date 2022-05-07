@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/davidsbond/tailscale-client-go/tailscale"
 	"github.com/digitalocean/godo"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-autoscaler/plugins"
@@ -23,7 +24,10 @@ const (
 	// pluginName is the unique name of the this plugin amongst Target plugins.
 	pluginName = "do-droplets"
 
-	configKeyToken      = "token"
+	configKeyToken            = "token"
+	configKeyTailscaleApiKey  = "tailscale_api_key"
+	configKeyTailscaleTailnet = "tailscale_tailnet"
+
 	configKeyRegion     = "region"
 	configKeySize       = "size"
 	configKeyVpcUUID    = "vpc_uuid"
@@ -53,7 +57,8 @@ type TargetPlugin struct {
 	config map[string]string
 	logger hclog.Logger
 
-	client *godo.Client
+	client          *godo.Client
+	tailscaleClient *tailscale.Client
 
 	// clusterUtils provides general cluster scaling utilities for querying the
 	// state of nodes pools and performing scaling tasks.
@@ -78,7 +83,6 @@ func (t *TargetPlugin) SetConfig(config map[string]string) error {
 	t.config = config
 
 	token, ok := config[configKeyToken]
-
 	if ok {
 		contents, err := pathOrContents(token)
 		if err != nil {
@@ -91,6 +95,36 @@ func (t *TargetPlugin) SetConfig(config map[string]string) error {
 			return fmt.Errorf("unable to find DigitalOcean token")
 		}
 		t.client = godo.NewFromToken(tokenFromEnv)
+	}
+
+	tailscaleToken, ok := config[configKeyTailscaleApiKey]
+	if ok {
+		contents, err := pathOrContents(tailscaleToken)
+		if err != nil {
+			return fmt.Errorf("failed to read token: %v", err)
+		}
+		tailscaleToken = contents
+	} else {
+		tailscaleToken = getEnv("TAILSCALE_API_KEY")
+	}
+
+	tailnet, ok := config[configKeyTailscaleTailnet]
+	if ok {
+		contents, err := pathOrContents(tailnet)
+		if err != nil {
+			return fmt.Errorf("failed to read token: %v", err)
+		}
+		tailnet = contents
+	} else {
+		tailnet = getEnv("TAILSCALE_API_KEY")
+	}
+
+	if tailscaleToken != "" || tailnet != "" {
+		client, err := tailscale.NewClient(tailscaleToken, tailnet)
+		if err != nil {
+			return err
+		}
+		t.tailscaleClient = client
 	}
 
 	clusterUtils, err := scaleutils.NewClusterScaleUtils(nomad.ConfigFromNamespacedMap(config), t.logger)
@@ -119,16 +153,17 @@ func (t *TargetPlugin) Scale(action sdk.ScalingAction, config map[string]string)
 
 	ctx := context.Background()
 
-	total, _, err := t.countDroplets(ctx, template)
+	droplets, err := t.getDroplets(ctx, template)
 	if err != nil {
 		return fmt.Errorf("failed to describe DigitalOcedroplets: %v", err)
 	}
 
+	total := int64(len(droplets))
 	diff, direction := t.calculateDirection(total, action.Count)
 
 	switch direction {
 	case "in":
-		err = t.scaleIn(ctx, action.Count, diff, template, config)
+		err = t.scaleIn(ctx, droplets, action.Count, diff, template, config)
 	case "out":
 		err = t.scaleOut(ctx, action.Count, diff, template, config)
 	default:
@@ -165,14 +200,14 @@ func (t *TargetPlugin) Status(config map[string]string) (*sdk.TargetStatus, erro
 
 	ctx := context.Background()
 
-	total, active, err := t.countDroplets(ctx, template)
+	droplets, err := t.getDroplets(ctx, template)
 	if err != nil {
 		return nil, fmt.Errorf("failed to describe DigitalOcedroplets: %v", err)
 	}
 
 	resp := &sdk.TargetStatus{
-		Ready: total == active,
-		Count: total,
+		Ready: true,
+		Count: int64(len(droplets)),
 		Meta:  make(map[string]string),
 	}
 

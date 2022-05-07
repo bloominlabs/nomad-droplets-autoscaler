@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/digitalocean/godo"
@@ -35,7 +36,7 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, desired, diff int64, templa
 
 	for i := int64(0); i < diff; i++ {
 		createRequest := &godo.DropletCreateRequest{
-			Name:    template.name + "-" + randstr.String(6),
+			Name:    template.name + "-" + strings.ToLower(randstr.String(6)),
 			Region:  template.region,
 			Size:    template.size,
 			VPCUUID: template.vpc,
@@ -75,9 +76,13 @@ func (t *TargetPlugin) scaleOut(ctx context.Context, desired, diff int64, templa
 	return nil
 }
 
-func (t *TargetPlugin) scaleIn(ctx context.Context, desired, diff int64, template *dropletTemplate, config map[string]string) error {
+func (t *TargetPlugin) scaleIn(ctx context.Context, servers []godo.Droplet, desired, diff int64, template *dropletTemplate, config map[string]string) error {
+	remoteIDs := []string{}
+	for _, server := range servers {
+		remoteIDs = append(remoteIDs, server.Name)
+	}
 
-	ids, err := t.clusterUtils.RunPreScaleInTasks(ctx, config, int(diff))
+	ids, err := t.clusterUtils.RunPreScaleInTasksWithRemoteCheck(ctx, config, remoteIDs, int(diff))
 	if err != nil {
 		return fmt.Errorf("failed to perform pre-scale Nomad scale in tasks: %v", err)
 	}
@@ -107,6 +112,32 @@ func (t *TargetPlugin) scaleIn(ctx context.Context, desired, diff int64, templat
 
 	log.Debug("scale in DigitalOcean droplets confirmed")
 
+	devices, err := t.tailscaleClient.Devices(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch tailscale devices: %w", err)
+	}
+
+	hostnameToDeviceIdMap := make(map[string]string)
+	for _, device := range devices {
+		// device.Name == <hostname>.<tailnet>
+		if strings.Contains(device.Name, "nomad-client") {
+			hostname := strings.ToLower(strings.Split(device.Name, ".")[0])
+			hostnameToDeviceIdMap[hostname] = device.ID
+		}
+	}
+
+	for _, node := range ids {
+		lowerRemoteResourceID := strings.ToLower(node.RemoteResourceID)
+		id := hostnameToDeviceIdMap[lowerRemoteResourceID]
+		log.Debug("removing tailscale device", "remote_id", node.RemoteResourceID, "id", id)
+		err = t.tailscaleClient.DeleteDevice(ctx, id)
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Debug("finish deleting tailscale device")
+
 	// Run any post scale in tasks that are desired.
 	if err := t.clusterUtils.RunPostScaleInTasks(ctx, config, ids); err != nil {
 		return fmt.Errorf("failed to perform post-scale Nomad scale in tasks: %v", err)
@@ -118,7 +149,8 @@ func (t *TargetPlugin) scaleIn(ctx context.Context, desired, diff int64, templat
 func (t *TargetPlugin) ensureDropletsAreStable(ctx context.Context, template *dropletTemplate, desired int64) error {
 
 	f := func(ctx context.Context) (bool, error) {
-		_, active, err := t.countDroplets(ctx, template)
+		total, err := t.getDroplets(ctx, template)
+		active := count(total, isReady)
 		if desired == active || err != nil {
 			return true, err
 		} else {
@@ -146,7 +178,7 @@ func (t *TargetPlugin) deleteDroplets(ctx context.Context, tag string, instanceI
 					log := t.logger.With("action", "delete", "droplet_id", strconv.Itoa(dropletId))
 					err := shutdownDroplet(dropletId, t.client, log)
 					if err != nil {
-						log.Error("error deleting droplet", err)
+						log.Error("error deleting droplet", "err", err)
 					}
 				}(d.ID)
 				dropletsToDelete = append(dropletsToDelete, d.ID)
@@ -170,19 +202,17 @@ func (t *TargetPlugin) deleteDroplets(ctx context.Context, tag string, instanceI
 	return nil
 }
 
-func (t *TargetPlugin) countDroplets(ctx context.Context, template *dropletTemplate) (int64, int64, error) {
-	var total int64 = 0
-	var ready int64 = 0
+func (t *TargetPlugin) getDroplets(ctx context.Context, template *dropletTemplate) ([]godo.Droplet, error) {
+	total := make([]godo.Droplet, 0)
 
 	opt := &godo.ListOptions{}
 	for {
 		droplets, resp, err := t.client.Droplets.ListByTag(ctx, template.name, opt)
 		if err != nil {
-			return 0, 0, err
+			return total, err
 		}
 
-		total = total + int64(len(droplets))
-		ready = ready + count(droplets, isReady)
+		total = append(total, droplets...)
 
 		if resp.Links == nil || resp.Links.IsLastPage() {
 			break
@@ -190,13 +220,13 @@ func (t *TargetPlugin) countDroplets(ctx context.Context, template *dropletTempl
 
 		page, err := resp.Links.CurrentPage()
 		if err != nil {
-			return 0, 0, err
+			return total, err
 		}
 
 		opt.Page = page + 1
 	}
 
-	return total, ready, nil
+	return total, nil
 }
 
 func count(droplets []godo.Droplet, predicate func(godo.Droplet) bool) int64 {
