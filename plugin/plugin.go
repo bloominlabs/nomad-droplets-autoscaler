@@ -116,10 +116,18 @@ func (t *TargetPlugin) SetConfig(config map[string]string) error {
 		}
 		tailnet = contents
 	} else {
-		tailnet = getEnv("TAILSCALE_API_KEY")
+		tailnet = getEnv("TAILSCALE_TAILNET")
 	}
 
 	if tailscaleToken != "" || tailnet != "" {
+		if tailnet == "" {
+			return fmt.Errorf("no tailnet specified. please use the 'TAILSCALE_TAILNET' environment variable or %s configuration value", configKeyTailscaleTailnet)
+		}
+
+		if tailscaleToken == "" {
+			return fmt.Errorf("no tailscale api key specified. please use the 'TAILSCALE_API_KEY' environment variable or %s configuration value", configKeyTailscaleTailnet)
+		}
+
 		client, err := tailscale.NewClient(tailscaleToken, tailnet)
 		if err != nil {
 			return err
