@@ -4,9 +4,8 @@ go 1.16
 
 require (
 	github.com/armon/go-metrics v0.3.10 // indirect
-	github.com/digitalocean/godo v1.75.0
+	github.com/digitalocean/godo v1.90.0
 	github.com/fatih/color v1.13.0 // indirect
-	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/hashicorp/consul/api v1.12.0 // indirect
 	github.com/hashicorp/go-hclog v1.1.0
@@ -25,8 +24,5 @@ require (
 	github.com/tailscale/tailscale-client-go v1.7.0
 	github.com/thanhpk/randstr v1.0.4
 	github.com/zclconf/go-cty v1.10.0 // indirect
-	golang.org/x/net v0.0.0-20220225172249-27dd8689420f // indirect
-	golang.org/x/oauth2 v0.0.0-20220223155221-ee480838109b // indirect
-	golang.org/x/sys v0.0.0-20220224120231-95c6836cb0e7 // indirect
 	google.golang.org/genproto v0.0.0-20220222213610-43724f9ea8cf // indirect
 )
