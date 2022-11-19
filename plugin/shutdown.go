@@ -34,7 +34,7 @@ func shutdownDroplet(
 	if err != nil {
 		var doError *godo.ErrorResponse
 		if errors.As(err, &doError) && doError.Response.StatusCode == http.StatusNotFound {
-			log.Warn("encountered 404 while deleting droplet. assuming it was already deleted an continuing")
+			log.Warn("encountered 404 while deleting droplet. assuming it was already deleted and continuing")
 		} else {
 			return fmt.Errorf("error deleting droplet: %s", err)
 		}
