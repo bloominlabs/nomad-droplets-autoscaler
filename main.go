@@ -1,9 +1,9 @@
 package main
 
 import (
+	"github.com/bloominlabs/nomad-droplets-autoscaler/plugin"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-autoscaler/plugins"
-	"github.com/jsiebens/nomad-droplets-autoscaler/plugin"
 )
 
 func main() {

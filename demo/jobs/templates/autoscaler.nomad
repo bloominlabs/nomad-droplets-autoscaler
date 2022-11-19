@@ -11,12 +11,12 @@ job "autoscaler" {
       driver = "docker"
 
       artifact {
-        source      = "https://github.com/jsiebens/nomad-droplets-autoscaler/releases/download/v0.2.0/do-droplets_linux_amd64.zip"
+        source      = "https://github.com/bloominlabs/nomad-droplets-autoscaler/releases/download/v0.3.1/do-droplets_linux_amd64.zip"
         destination = "local/plugins/"
       }
 
       config {
-        image   = "hashicorp/nomad-autoscaler:0.3.3"
+        image   = "hashicorp/nomad-autoscaler:0.3.7"
         command = "nomad-autoscaler"
 
         args = [
