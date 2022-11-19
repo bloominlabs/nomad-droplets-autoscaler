@@ -2,7 +2,9 @@ package plugin
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/digitalocean/godo"
@@ -30,7 +32,12 @@ func shutdownDroplet(
 	log.Debug("Deleting Droplet...")
 	_, err = client.Droplets.Delete(context.TODO(), dropletId)
 	if err != nil {
-		return fmt.Errorf("error deleting droplet: %s", err)
+		var doError *godo.ErrorResponse
+		if errors.As(err, &doError) && doError.Response.StatusCode == http.StatusNotFound {
+			log.Warn("encountered 404 while deleting droplet. assuming it was already deleted an continuing")
+		} else {
+			return fmt.Errorf("error deleting droplet: %s", err)
+		}
 	}
 
 	return nil

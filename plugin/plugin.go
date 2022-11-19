@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/davidsbond/tailscale-client-go/tailscale"
 	"github.com/digitalocean/godo"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad-autoscaler/plugins"
@@ -18,6 +17,7 @@ import (
 	"github.com/hashicorp/nomad-autoscaler/sdk/helper/nomad"
 	"github.com/hashicorp/nomad-autoscaler/sdk/helper/scaleutils"
 	"github.com/mitchellh/go-homedir"
+	"github.com/tailscale/tailscale-client-go/tailscale"
 )
 
 const (
