@@ -3,7 +3,7 @@ module github.com/bloominlabs/nomad-droplets-autoscaler
 go 1.19
 
 require (
-	github.com/digitalocean/godo v1.90.0
+	github.com/digitalocean/godo v1.97.0
 	github.com/hashicorp/go-hclog v1.3.1
 	github.com/hashicorp/nomad-autoscaler v0.3.7
 	github.com/hashicorp/nomad/api v0.0.0-20221119034910-4703f55d6d49
