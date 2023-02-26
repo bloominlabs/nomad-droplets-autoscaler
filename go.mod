@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/nomad-autoscaler v0.3.7
 	github.com/hashicorp/nomad/api v0.0.0-20221119034910-4703f55d6d49
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.2
 	github.com/tailscale/tailscale-client-go v1.7.0
 	github.com/thanhpk/randstr v1.0.4
 )
